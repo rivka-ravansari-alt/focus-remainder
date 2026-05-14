@@ -9,6 +9,8 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: {
+        demo: "demo.html",
+        options: "options.html",
         popup: "popup.html"
       },
       output: {

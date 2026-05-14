@@ -56,10 +56,6 @@ export function getHostnameFromUrl(url: string): string | null {
   }
 }
 
-export function isHostnameLimited(hostname: string, limitedSites: string[]): boolean {
-  return getLimitedSiteForHostname(hostname, limitedSites) !== null;
-}
-
 export function getLimitedSiteForHostname(
   hostname: string,
   limitedSites: string[]

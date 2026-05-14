@@ -10,6 +10,7 @@ import {
   saveUsage,
   upsertActiveTimer
 } from "./shared/storage";
+import { getDateKey } from "./shared/date";
 import {
   getHostnameFromUrl,
   getLimitedSiteForHostname
@@ -57,14 +58,6 @@ async function sendMessageToTab(tabId: number, message: RuntimeMessage): Promise
   } catch (error) {
     console.warn("Focus Reminder could not message tab", tabId, error);
   }
-}
-
-function getDateKey(timestamp: number): string {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function getNextDayStart(timestamp: number): number {
@@ -263,6 +256,11 @@ async function clearDisabledTimers(enabledSites: string[]): Promise<void> {
   await saveActiveTimers(nextTimers);
 }
 
+async function clearTimerForTab(tabId: number): Promise<void> {
+  await removeActiveTimer(tabId);
+  await chrome.alarms.clear(getAlarmName(tabId));
+}
+
 async function hidePromptOnDisabledTabs(enabledSites: string[]): Promise<void> {
   const tabs = await chrome.tabs.query({});
 
@@ -376,8 +374,7 @@ async function handleCloseTab(
     return;
   }
 
-  await removeActiveTimer(tabId);
-  await chrome.alarms.clear(getAlarmName(tabId));
+  await clearTimerForTab(tabId);
 
   try {
     await chrome.tabs.remove(tabId);
@@ -388,28 +385,22 @@ async function handleCloseTab(
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
   const work = async () => {
-    if (message.type === "FOCUS_PAGE_READY") {
-      await handlePageReady(message, sender);
-      return;
-    }
-
-    if (message.type === "FOCUS_START_TIMER") {
-      await handleStartTimer(message, sender);
-      return;
-    }
-
-    if (message.type === "FOCUS_CLOSE_TAB") {
-      await handleCloseTab(message, sender);
-      return;
-    }
-
-    if (message.type === "FOCUS_FLUSH_USAGE") {
-      await queueUsageTracking(flushCurrentUsageWithoutPausing);
-      return;
-    }
-
-    if (message.type === "FOCUS_SETTINGS_CHANGED") {
-      await handleSettingsChanged();
+    switch (message.type) {
+      case "FOCUS_PAGE_READY":
+        await handlePageReady(message, sender);
+        break;
+      case "FOCUS_START_TIMER":
+        await handleStartTimer(message, sender);
+        break;
+      case "FOCUS_CLOSE_TAB":
+        await handleCloseTab(message, sender);
+        break;
+      case "FOCUS_FLUSH_USAGE":
+        await queueUsageTracking(flushCurrentUsageWithoutPausing);
+        break;
+      case "FOCUS_SETTINGS_CHANGED":
+        await handleSettingsChanged();
+        break;
     }
   };
 
@@ -448,8 +439,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   const work = async () => {
-    await removeActiveTimer(tabId);
-    await chrome.alarms.clear(getAlarmName(tabId));
+    await clearTimerForTab(tabId);
     await queueUsageTracking(async () => {
       const session = await getActiveUsageSession();
 
@@ -459,10 +449,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     });
   };
 
-  work()
-    .catch((error) => {
-      console.warn("Focus Reminder cleanup failed", error);
-    });
+  work().catch((error) => {
+    console.warn("Focus Reminder cleanup failed", error);
+  });
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { getDateKeyDaysAgo } from "../shared/date";
 import { getSettings, getUsage, saveSettings } from "../shared/storage";
 import { normalizeSiteInput } from "../shared/sites";
 import type {
@@ -23,16 +24,6 @@ const SUMMARY_TABS: { id: SummaryTab; label: string }[] = [
   { id: "yesterday", label: "Yesterday" },
   { id: "last7", label: "Last 7 days" }
 ];
-
-function getDateKey(daysAgo = 0): string {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function formatDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
@@ -58,6 +49,8 @@ function getSessionLabel(sessions: number): string {
   return sessions === 1 ? "1 session" : `${sessions} sessions`;
 }
 
+const EMPTY_USAGE_ENTRY: UsageEntry = { seconds: 0, sessions: 0 };
+
 function combineEntries(entries: UsageEntry[]): UsageEntry {
   return entries.reduce(
     (total, entry) => ({
@@ -78,13 +71,11 @@ function buildSummaryRows(
       activeTab === "last7"
         ? combineEntries(
             Array.from({ length: 7 }, (_value, index) => {
-              return usage[getDateKey(index)]?.[site] ?? { seconds: 0, sessions: 0 };
+              return usage[getDateKeyDaysAgo(index)]?.[site] ?? EMPTY_USAGE_ENTRY;
             })
           )
-        : usage[getDateKey(activeTab === "today" ? 0 : 1)]?.[site] ?? {
-            seconds: 0,
-            sessions: 0
-          };
+        : usage[getDateKeyDaysAgo(activeTab === "today" ? 0 : 1)]?.[site] ??
+          EMPTY_USAGE_ENTRY;
 
     return {
       site,
